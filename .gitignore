@@ -1,0 +1,23 @@
+# WordPress plugin .gitignore
+# Exclude OS/system files
+.DS_Store
+Thumbs.db
+
+# Exclude IDE files
+.vscode/
+.idea/
+
+# Exclude build or temporary files
+*.log
+*.tmp
+
+# Exclude node modules if used later
+node_modules/
+
+# Exclude backup or package files
+*.zip
+*.bak
+*.old
+
+# Ignore composer vendor if not needed
+vendor/
