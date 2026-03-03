@@ -10,52 +10,165 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 // ==========================
-// DEFINE TMDB API KEY
+// TRANSIENT KEYS
 // ==========================
-if ( ! defined('TMDB_API_KEY') ) {
-    define('TMDB_API_KEY', 'din_tmdb_api_nyckel'); // Byt ut mot din riktiga nyckel
+define('WP_MOVIES_TRANSIENT_MOVIE', 'wp_movies_tmdb_movie');
+define('WP_MOVIES_TRANSIENT_TV', 'wp_movies_tmdb_tv');
+
+// ==========================
+// SIMPLE DEBUG LOGGER
+// ==========================
+function wp_movies_log($message, $level = 'info') {
+
+    // Only log in local environment
+    if (!defined('WP_ENVIRONMENT_TYPE') || constant('WP_ENVIRONMENT_TYPE') !== 'local') {
+        return;
+    }
+
+    // Only log warnings and errors (not normal info messages)
+    if ($level === 'error' || $level === 'warning') {
+
+        if (is_array($message) || is_object($message)) {
+            error_log(print_r($message, true));
+        } else {
+            error_log($message);
+        }
+
+    }
+}
+
+// ==========================
+// REQUIRE TMDB API KEY
+// ==========================
+if ( ! defined('TMDB_API_KEY') || ! constant('TMDB_API_KEY') ) {
+
+    add_action('admin_notices', function () {
+        echo '<div class="notice notice-error"><p><strong>WP Movies:</strong> TMDB_API_KEY is missing or empty in wp-config.php.</p></div>';
+    });
+
+    return; // STOP plugin execution safely
 }
 
 // ==========================
 // CREATE TABLE ON PLUGIN ACTIVATION
 // ==========================
 register_activation_hook( __FILE__, 'wp_movies_create_table_if_not_exists' );
+
 function wp_movies_create_table_if_not_exists() {
     global $wpdb;
     $table_name = $wpdb->prefix . 'movies';
+    $charset_collate = $wpdb->get_charset_collate();
 
-    if ( $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) != $table_name ) {
-        $charset_collate = $wpdb->get_charset_collate();
-        $sql = "CREATE TABLE $table_name (
-            id mediumint(9) NOT NULL AUTO_INCREMENT,
-            tmdb_id bigint(20) NOT NULL,
-            title text NOT NULL,
-            poster varchar(255) DEFAULT '' NOT NULL,
-            release_date date DEFAULT NULL,
-            type varchar(20) DEFAULT 'movie' NOT NULL,
-            PRIMARY KEY  (id),
-            UNIQUE KEY tmdb_id (tmdb_id)
-        ) $charset_collate;";
+    $sql = "CREATE TABLE $table_name (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        tmdb_id bigint(20) NOT NULL,
+        title text NOT NULL,
+        genre varchar(255) DEFAULT NULL,
+        poster varchar(255) DEFAULT '' NOT NULL,
+        release_date date DEFAULT NULL,
+        type varchar(20) DEFAULT 'movie' NOT NULL,
+        PRIMARY KEY  (id),
+        UNIQUE KEY tmdb_id (tmdb_id)
+    ) $charset_collate;";
 
-        require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
-        dbDelta( $sql );
-    }
+    require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+    dbDelta( $sql );
+
+    // Clear any existing TMDB cache on activation
+    delete_transient(WP_MOVIES_TRANSIENT_MOVIE);
+    delete_transient(WP_MOVIES_TRANSIENT_TV);
 }
 
 // ==========================
 // FETCH FROM TMDB
 // ==========================
 function wp_movies_fetch_from_tmdb( $type = 'movie' ) {
-    $api_key = TMDB_API_KEY;
-    $api_url = "https://api.themoviedb.org/3/{$type}/popular?api_key={$api_key}&language=en-US&page=1";
 
-    $response = wp_remote_get($api_url);
-    if ( is_wp_error($response) ) return false;
+    // Allow only valid types
+    $type = ($type === 'tv') ? 'tv' : 'movie';
 
-    $body = wp_remote_retrieve_body($response);
-    $data = json_decode($body);
+    $transient_key = ($type === 'tv')
+    ? WP_MOVIES_TRANSIENT_TV
+    : WP_MOVIES_TRANSIENT_MOVIE;
 
-    return isset($data->results) ? $data->results : false;
+    $cached = get_transient($transient_key);
+    if ( false !== $cached ) {
+        return $cached;
+    }
+
+    // Ensure API key exists
+    if ( ! defined('TMDB_API_KEY') || ! constant('TMDB_API_KEY') ) {
+        wp_movies_log('TMDB_API_KEY missing or empty.', 'error');
+        return false;
+    }
+
+    $api_key = constant('TMDB_API_KEY');
+
+    $api_url = sprintf(
+        'https://api.themoviedb.org/3/%s/popular?api_key=%s&language=en-US&page=1',
+        $type,
+        urlencode($api_key)
+    );
+
+    $response = wp_remote_get( $api_url, [
+        'timeout' => 15,
+    ]);
+
+    // Retry once if first request fails
+    if ( is_wp_error( $response ) ) {
+
+        $error_code = $response->get_error_code();
+
+        if ( $error_code === 'http_request_failed' ) {
+            wp_movies_log('First TMDB request failed. Retrying...', 'warning');
+
+            $response = wp_remote_get( $api_url, [ 'timeout' => 15 ] );
+        }
+
+        if ( is_wp_error( $response ) ) {
+            wp_movies_log(
+                'TMDB request failed after retry: ' . $response->get_error_message(),
+                'error'
+            );
+            return false;
+        }
+    }
+
+    // Kontrollera HTTP-statuskod
+    $status_code = wp_remote_retrieve_response_code( $response );
+
+    if ( $status_code === 429 ) {
+        wp_movies_log('TMDB rate limit reached.', 'error');
+        return false;
+    }
+
+    if ( $status_code !== 200 ) {
+        wp_movies_log('TMDB returned HTTP status: ' . $status_code, 'error');
+        return false;
+    }
+
+    $body = wp_remote_retrieve_body( $response );
+
+    if ( empty( $body ) ) {
+        wp_movies_log('TMDB returned empty body.', 'error');
+        return false;
+    }
+
+    $data = json_decode( $body );
+
+    if ( json_last_error() !== JSON_ERROR_NONE ) {
+        wp_movies_log('JSON decode error: ' . json_last_error_msg(), 'error');
+        return false;
+    }
+
+    if ( empty( $data->results ) || ! is_array( $data->results ) ) {
+        wp_movies_log('TMDB response missing results array.', 'error');
+        return false;
+    }
+
+    set_transient($transient_key, $data->results, HOUR_IN_SECONDS);
+
+    return $data->results;
 }
 
 /**
@@ -77,7 +190,7 @@ function wp_movies_get_tmdb_movie_details($tmdb_id, $api_key, $language = 'en-US
     $response = wp_remote_get($url);
 
     if (is_wp_error($response)) {
-        error_log('TMDB API Fel: ' . $response->get_error_message());
+        wp_movies_log('TMDB API Error: ' . $response->get_error_message(), 'error');
         return false;
     }
 
@@ -85,7 +198,7 @@ function wp_movies_get_tmdb_movie_details($tmdb_id, $api_key, $language = 'en-US
     $data = json_decode($body);
 
     if (json_last_error() !== JSON_ERROR_NONE || empty($data) || isset($data->status_code)) {
-        error_log('Fel i TMDB-svar: ' . $body);
+        wp_movies_log('TMDB API response error: ' . $body, 'error');
         return false;
     }
 
@@ -103,7 +216,7 @@ function wp_movies_save_tmdb_movie($movie) {
 
     // Kontrollera att rätt fält finns
     if (!isset($movie->id, $movie->title, $movie->release_date)) {
-        error_log('Måste ha id, title, release_date');
+        wp_movies_log('Missing required fields: id, title, release_date');
         return false;
     }
 
@@ -128,7 +241,7 @@ function wp_movies_save_tmdb_movie($movie) {
     if ($existing_id) {
         // Om du vill uppdatera posten istället, avkommentera dessa rader:
         
-        $wpdb->update(
+        $result = $wpdb->update(
             $table,
             array(
                 'title'        => $movie->title,
@@ -141,10 +254,13 @@ function wp_movies_save_tmdb_movie($movie) {
             array('%s', '%s', '%s', '%s', '%s'),
             array('%d')
         );
-        return $existing_id;
-        
-        // Om du bara vill ignorera och INTE lägga till dubbletten:
-        error_log("Filmen {$movie->id} finns redan, hoppar över.");
+
+        if ($result === false) {
+            wp_movies_log('Database update error: ' . $wpdb->last_error);
+            return false;
+        }
+
+        wp_movies_log("Movie {$movie->id} updated.");
         return $existing_id;
     }
 
@@ -163,27 +279,11 @@ function wp_movies_save_tmdb_movie($movie) {
     $result = $wpdb->insert($table, $data, $format);
 
     if (false === $result) {
-        error_log('Fel vid insert: ' . $wpdb->last_error);
+        wp_movies_log('Database insert error: ' . $wpdb->last_error);
         return false;
     }
     return $wpdb->insert_id;
 }
-
-add_action('init', function() {
-    $api_key = TMDB_API_KEY;
-    $tmdb_id = 1061474; // Exempel: Superman
-    $movie = wp_movies_get_tmdb_movie_details($tmdb_id, $api_key, 'en-US');
-    if ($movie) {
-        $result = wp_movies_save_tmdb_movie($movie);
-        if ($result) {
-            error_log('Filmdat sparad i wp_movies!');
-        } else {
-            error_log('Fel vid sparande till tabell: ' . $GLOBALS['wpdb']->last_error);
-        }
-    } else {
-        error_log('Kunde inte hämta data från TMDB.');
-    }
-});
 
 // ==========================
 // SAVE TO DB (with genres)
@@ -193,9 +293,9 @@ function wp_movies_save_to_db($items, $type = 'movie') {
     $table_name = $wpdb->prefix . 'movies';
 
     foreach ( $items as $item ) {
-		 // Logga genre_ids och genres för felsökning
-        error_log('WP Movies genre_ids: ' . print_r($item->genre_ids ?? null, true));
-        error_log('WP Movies genres: ' . print_r($item->genres ?? null, true));
+	    // Logga genre_ids och genres för felsökning
+        // wp_movies_log('WP Movies genre_ids: ' . print_r($item->genre_ids ?? null, true));
+        // wp_movies_log('WP Movies genres: ' . print_r($item->genres ?? null, true));
 
         // --- Hämta genretext ---
         $genre_text = '';
@@ -210,7 +310,7 @@ function wp_movies_save_to_db($items, $type = 'movie') {
         }
 
         // --- Spara allt till databasen ---
-        $wpdb->replace(
+        $result = $wpdb->replace(
             $table_name,
             [
                 'tmdb_id'      => $item->id,
@@ -222,6 +322,10 @@ function wp_movies_save_to_db($items, $type = 'movie') {
             ],
             ['%d','%s','%s','%s','%s','%s']
         );
+
+        if ($result === false) {
+            wp_movies_log('Database replace error: ' . $wpdb->last_error);
+        }
     }
 }
 
@@ -280,44 +384,36 @@ function wp_movies_get_genre_names_from_ids( $ids, $type = 'movie' ) {
         if ( isset( $map[ $id ] ) ) {
             $names[] = $map[ $id ];
         } else {
-            error_log("Unknown genre ID: $id for type $type");
+            wp_movies_log("Unknown genre ID: $id for type $type", 'warning');
         }
     }
-	// error_log('WP Movies DEBUG: genre_ids: ' . print_r($ids, true) . ' returnerade namn: ' . print_r($names, true));
     return $names;
 } 
 
 // ==========================
-// FETCH & SAVE WITH LOGGING
+// FETCH & SAVE
 // ==========================
 function wp_movies_fetch_and_save() {
-    $current_user = wp_get_current_user();
-    $username = $current_user && $current_user->exists() ? $current_user->user_login : 'system';
 
-    error_log("\n==================== TMDB SYNC START ====================");
-    error_log("Triggered by: {$username}");
-    error_log("Timestamp: " . date('Y-m-d H:i:s'));
+    // Clear TMDB cache before manual update
+    delete_transient(WP_MOVIES_TRANSIENT_MOVIE);
+    delete_transient(WP_MOVIES_TRANSIENT_TV);
 
     // Movies
     $movies = wp_movies_fetch_from_tmdb('movie');
     if ($movies) {
         wp_movies_save_to_db($movies, 'movie');
-        error_log("✅ Movies fetched and saved (" . count($movies) . " items)");
     } else {
-        error_log("⚠️ Failed to fetch movies from TMDB");
+        wp_movies_log("Failed to fetch movies from TMDB", 'error');
     }
 
     // TV Shows
     $tvshows = wp_movies_fetch_from_tmdb('tv');
     if ($tvshows) {
         wp_movies_save_to_db($tvshows, 'tv');
-        error_log("✅ TV shows fetched and saved (" . count($tvshows) . " items)");
     } else {
-        error_log("⚠️ Failed to fetch TV shows from TMDB");
+        wp_movies_log("Failed to fetch TV shows from TMDB", 'error');
     }
-
-    error_log("TMDB sync completed at " . date('Y-m-d H:i:s'));
-    error_log("===================== TMDB SYNC END =====================\n");
 }
 
 // ==========================
@@ -331,19 +427,7 @@ function wp_movies_get_from_db($type = 'movie', $limit = 8, $random = false) {
         ? $wpdb->prepare("SELECT * FROM $table_name WHERE type = %s ORDER BY RAND() LIMIT %d", $type, $limit)
         : $wpdb->prepare("SELECT * FROM $table_name WHERE type = %s ORDER BY id DESC LIMIT %d", $type, $limit);
 
-    $results = $wpdb->get_results($query);
-
-    $user = wp_get_current_user();
-    $username = $user && $user->exists() ? $user->user_login : 'system';
-    $method = $random ? 'Random selection' : 'Latest entries';
-
-    error_log("\n--- DB FETCH ---");
-    error_log("User: {$username}");
-    error_log("Type: {$type}");
-    error_log("Method: {$method}");
-    error_log("Count: " . count($results));
-    error_log("Timestamp: " . date('Y-m-d H:i:s'));
-    error_log("----------------\n");
+    $results = $wpdb->get_results($query);   
 
     return $results;
 }
@@ -365,14 +449,19 @@ add_action('admin_menu', function() {
 function wp_movies_update_missing_genres() {
     global $wpdb;
 
-    $tmdb_api_key = TMDB_API_KEY;
+    if ( ! defined('TMDB_API_KEY') ) {
+        wp_movies_log('TMDB_API_KEY missing.');
+        return [];
+    }
+
+    $tmdb_api_key = defined('TMDB_API_KEY') ? constant('TMDB_API_KEY') : '';
     $table = $wpdb->prefix . 'movies';
 
     $rows = $wpdb->get_results("SELECT * FROM $table WHERE genre IS NULL OR genre = ''");
     $updated_posts = array();
 
     if (!$rows) {
-        error_log('wp-movies: Inga filmer eller serier att uppdatera.');
+        wp_movies_log("No movies or TV shows needed genre updates.");
         return $updated_posts;
     }
 
@@ -380,11 +469,11 @@ function wp_movies_update_missing_genres() {
         $tmdb_id = $row->tmdb_id;
         $type = $row->type;
 
-        $url = "https://api.themoviedb.org/3/{$type}/{$tmdb_id}?api_key={$tmdb_api_key}&language=sv-SE";
+        $url = "https://api.themoviedb.org/3/{$type}/{$tmdb_id}?api_key={$tmdb_api_key}&language=en-US";
         $response = wp_remote_get($url);
 
         if (is_wp_error($response)) {
-            error_log("wp-movies: Fel vid TMDB-anrop för $tmdb_id ({$row->title})");
+            wp_movies_log("TMDB request failed for ID {$tmdb_id} ({$row->title})");
             continue;
         }
 
@@ -392,7 +481,7 @@ function wp_movies_update_missing_genres() {
         $data = json_decode($body);
 
         if (empty($data->genres)) {
-            error_log("wp-movies: Inga genres funna för $tmdb_id ({$row->title})");
+            wp_movies_log("No genres returned for ID {$tmdb_id} ({$row->title})");
             continue;
         }
 
@@ -414,24 +503,56 @@ function wp_movies_update_missing_genres() {
                 'genres' => $genres
             );
             // Logga varje uppdatering direkt till debug.log
-            error_log("wp-movies: Genre uppdaterad: $info");
+            wp_movies_log("Genre updated: {$info}");
         } else {
-            error_log("wp-movies: Misslyckades uppdatera genre för $tmdb_id ({$row->title})");
+            wp_movies_log("Failed to update genre for ID {$tmdb_id} ({$row->title})");
         }
     }
 
     // Optionellt: Sammanfattning till debug.log
     if (!empty($updated_posts)) {
-        error_log('wp-movies: Totalt uppdaterade poster: ' . count($updated_posts));
+        wp_movies_log("Total updated rows: " . count($updated_posts));
     } else {
-        error_log('wp-movies: Ingen post uppdaterades.');
+        wp_movies_log("No rows were updated.");
     }
-
-    return $updated_posts;
+        return $updated_posts;
 }
 
-// Kör funktionen direkt, endast en gång eller via t.ex. adminmeny/WP-CLI
-wp_movies_update_missing_genres();
+add_action('admin_init', 'wp_movies_handle_admin_actions');
+
+function wp_movies_handle_admin_actions() {
+
+    if ( ! isset($_GET['page']) || $_GET['page'] !== 'update-tmdb-data' ) {
+        return;
+    }
+
+    if ( isset($_POST['wp_movies_update']) && check_admin_referer('wp_movies_update_nonce') ) {
+
+        wp_movies_fetch_and_save();
+
+        wp_redirect(
+            add_query_arg(
+                array( 'wp_movies_notice' => 'updated' ),
+                admin_url('tools.php?page=update-tmdb-data')
+            )
+        );
+        exit;
+    }
+
+    if ( isset($_POST['wp_movies_update_genres']) && check_admin_referer('wp_movies_update_genres_nonce') ) {
+
+        $updated_posts = wp_movies_update_missing_genres();
+        $status = empty($updated_posts) ? 'no_genres' : 'genres_updated';
+
+        wp_redirect(
+            add_query_arg(
+                array( 'wp_movies_notice' => $status ),
+                admin_url('tools.php?page=update-tmdb-data')
+            )
+        );
+        exit;
+    }
+}
 
 // ==========================
 // ADMIN PAGE CALLBACK
@@ -439,54 +560,58 @@ wp_movies_update_missing_genres();
 function wp_movies_admin_page() {
     ?>
     <div class="wrap">
-		<h1>Update Local Database from TMDB</h1>
-		<p>This will fetch the latest popular movies and TV shows from TMDB and update the local <code>wp_movies</code> table.</p>
+        <h1>Update Local Database from TMDB</h1>
+        <p>This will fetch the latest popular movies and TV shows from TMDB and update the local <code>wp_movies</code> table.</p>
+
+    <?php
+        // --------------------------
+        // DISPLAY NOTICES (GET only)
+        // --------------------------
+        $notice = isset($_GET['wp_movies_notice'])
+            ? sanitize_text_field($_GET['wp_movies_notice'])
+            : '';
+
+        if ( $notice ) {
+
+            if ( $notice === 'updated' ) {
+                echo '<div class="notice notice-success is-dismissible">';
+                echo '<p>TMDB data in the local database has been updated successfully.</p>';
+                echo '</div>';
+            }
+
+            elseif ( $notice === 'genres_updated' ) {
+                echo '<div class="notice notice-success is-dismissible">';
+                echo '<p>Missing genres were successfully synced from TMDB.</p>';
+                echo '</div>';
+            }
+
+            elseif ( $notice === 'no_genres' ) {
+                echo '<div class="notice notice-warning is-dismissible">';
+                echo '<p>No genres needed updating.</p>';
+                echo '</div>';
+            }
+        }
+    ?>
 
         <!-- Update Now button -->
         <form method="post">
             <?php wp_nonce_field('wp_movies_update_nonce'); ?>
-            <input type="submit" name="wp_movies_update" class="button button-primary"
-                value="Update Now from TMDB">
+            <input type="submit" name="wp_movies_update"
+                   class="button button-primary"
+                   value="Update Now from TMDB">
         </form>
-		
-		<form method="post" style="margin-top:1em;">
-			<?php wp_nonce_field('wp_movies_update_genres_nonce'); ?>
-			<input type="submit" name="wp_movies_update_genres" class="button button-secondary"
-				value="Uppdatera saknade genrer">
-		</form>
-		
-		<?php
-		if ( isset($_POST['wp_movies_update_genres']) && check_admin_referer('wp_movies_update_genres_nonce') ) {
-			$updated_posts = wp_movies_update_missing_genres();
-			if (!empty($updated_posts)) {
-				echo '<div class="notice notice-success is-dismissible">';
-				echo '<p>Genrer har uppdaterats för följande:</p>';
-				echo '<ul style="max-height:300px;overflow:auto;">';
-				foreach ($updated_posts as $post) {
-					echo '<li><strong>' . esc_html($post['title']) . '</strong> (' . esc_html(ucfirst($post['type'])) . ') – <em>' . esc_html($post['genres']) . '</em></li>';
-				}
-				echo '</ul>';
-				echo '</div>';
-			} else {
-				echo '<div class="notice notice-warning is-dismissible">';
-				echo '<p>Inga genrer kunde uppdateras. (Alla kanske redan har genrer?)</p>';
-				echo '</div>';
-			}
-		}
-        
-        if ( isset($_POST['wp_movies_update']) && check_admin_referer('wp_movies_update_nonce') ) {
-            wp_movies_fetch_and_save();
-            echo '<div class="notice notice-success is-dismissible">';
-            echo '<p>TMDB data in the local database has been updated from <a href="https://www.themoviedb.org" target="_blank">TMDB</a> with latest movies and TV Shows.</p>';
-            echo '</div>';
-        }
-        ?>
+
+        <form method="post" style="margin-top:1em;">
+            <?php wp_nonce_field('wp_movies_update_genres_nonce'); ?>
+            <input type="submit" name="wp_movies_update_genres"
+                   class="button button-secondary"
+                   value="Sync Missing Genres from TMDB">
+        </form>
 
         <p>&nbsp;</p>
-		<hr>
-		<p>&nbsp;</p>
+        <hr>
+        <p>&nbsp;</p>
 
-        <!-- Randomize Local Data (for testing) -->
         <h2>Randomize Local Data</h2>
         <p>These buttons shuffle 8 random movies or TV shows from the local database. For testing / debug only.</p>
 
@@ -518,9 +643,9 @@ add_action('admin_enqueue_scripts', function($hook) {
     ]);
 });
 
-// ==========================
+// ==============================
 // AJAX: Admin - Refresh Movies
-// ==========================
+// ==============================
 add_action('wp_ajax_refresh_movies', 'wp_movies_refresh_movies');
 function wp_movies_refresh_movies() {
     if ( ! current_user_can('manage_options') ) wp_send_json_error('Unauthorized', 403);
@@ -528,28 +653,18 @@ function wp_movies_refresh_movies() {
 
     $movies = wp_movies_get_from_db('movie', 8, true);
 
-    error_log("\n=== MANUAL REFRESH: MOVIES ===");
-    error_log('Triggered by: ' . wp_get_current_user()->user_login);
-    error_log('Number of movies randomized: ' . count($movies));
-    error_log('Time: ' . date('Y-m-d H:i:s') . "\n");
-
     wp_send_json_success(['movies' => $movies]);
 }
 
-// ==========================
+// ===============================
 // AJAX: Admin - Refresh TV Shows
-// ==========================
+// ===============================
 add_action('wp_ajax_refresh_tvshows', 'wp_movies_refresh_tvshows');
 function wp_movies_refresh_tvshows() {
     if ( ! current_user_can('manage_options') ) wp_send_json_error('Unauthorized', 403);
     if ( ! check_ajax_referer('refresh_tvshows_nonce', '_wpnonce', false) ) wp_send_json_error('Nonce verification failed', 403);
 
     $tvshows = wp_movies_get_from_db('tv', 8, true);
-
-    error_log("\n=== MANUAL REFRESH: TV SHOWS ===");
-    error_log('Triggered by: ' . wp_get_current_user()->user_login);
-    error_log('Number of TV shows randomized: ' . count($tvshows));
-    error_log('Time: ' . date('Y-m-d H:i:s') . "\n");
 
     wp_send_json_success(['tvshows' => $tvshows]);
 }
