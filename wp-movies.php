@@ -6,18 +6,40 @@
  * Author: Anders Johansson
  */
 
-// Exit if accessed directly
+// ==========================
+// SECURITY
+// ==========================
+
 if ( ! defined( 'ABSPATH' ) ) exit;
+
+// ==========================
+// CONSTANTS
+// ==========================
+
+define( 'WP_MOVIES_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
+
+// ==========================
+// LOAD PLUGIN MODULES
+// ==========================
+
+require_once WP_MOVIES_PLUGIN_PATH . 'includes/admin.php';
+require_once WP_MOVIES_PLUGIN_PATH . 'includes/assets.php';
+require_once WP_MOVIES_PLUGIN_PATH . 'includes/contact.php';
+require_once WP_MOVIES_PLUGIN_PATH . 'includes/cpt.php';
+require_once WP_MOVIES_PLUGIN_PATH . 'includes/database.php';
+require_once WP_MOVIES_PLUGIN_PATH . 'includes/session.php';
 
 // ==========================
 // TRANSIENT KEYS
 // ==========================
+
 define('WP_MOVIES_TRANSIENT_MOVIE', 'wp_movies_tmdb_movie');
 define('WP_MOVIES_TRANSIENT_TV', 'wp_movies_tmdb_tv');
 
 // ==========================
 // SIMPLE DEBUG LOGGER
 // ==========================
+
 function wp_movies_log($message, $level = 'info') {
 
     // Only log in local environment
@@ -40,6 +62,7 @@ function wp_movies_log($message, $level = 'info') {
 // ==========================
 // REQUIRE TMDB API KEY
 // ==========================
+
 if ( ! defined('TMDB_API_KEY') || ! constant('TMDB_API_KEY') ) {
 
     add_action('admin_notices', function () {
@@ -52,6 +75,7 @@ if ( ! defined('TMDB_API_KEY') || ! constant('TMDB_API_KEY') ) {
 // ==========================
 // CREATE TABLE ON PLUGIN ACTIVATION
 // ==========================
+
 register_activation_hook( __FILE__, 'wp_movies_create_table_if_not_exists' );
 
 function wp_movies_create_table_if_not_exists() {
@@ -82,6 +106,7 @@ function wp_movies_create_table_if_not_exists() {
 // ==========================
 // FETCH FROM TMDB
 // ==========================
+
 function wp_movies_fetch_from_tmdb( $type = 'movie' ) {
 
     // Allow only valid types
@@ -288,6 +313,7 @@ function wp_movies_save_tmdb_movie($movie) {
 // ==========================
 // SAVE TO DB (with genres)
 // ==========================
+
 function wp_movies_save_to_db($items, $type = 'movie') {
     global $wpdb;
     $table_name = $wpdb->prefix . 'movies';
@@ -332,6 +358,7 @@ function wp_movies_save_to_db($items, $type = 'movie') {
 // ==========================
 // HELPER: Convert genre IDs → names
 // ==========================
+
 function wp_movies_get_genre_names_from_ids( $ids, $type = 'movie' ) {
     // Vanliga TMDB-genrer
     $genres_movie = [
@@ -393,6 +420,7 @@ function wp_movies_get_genre_names_from_ids( $ids, $type = 'movie' ) {
 // ==========================
 // FETCH & SAVE
 // ==========================
+
 function wp_movies_fetch_and_save() {
 
     // Clear TMDB cache before manual update
@@ -419,6 +447,7 @@ function wp_movies_fetch_and_save() {
 // ==========================
 // FETCH FROM DB (random & logging)
 // ==========================
+
 function wp_movies_get_from_db($type = 'movie', $limit = 8, $random = false) {
     global $wpdb;
     $table_name = $wpdb->prefix . 'movies';
@@ -431,20 +460,6 @@ function wp_movies_get_from_db($type = 'movie', $limit = 8, $random = false) {
 
     return $results;
 }
-
-// ==========================
-// ADMIN MENU
-// ==========================
-add_action('admin_menu', function() {
-    add_submenu_page(
-        'tools.php',
-        'Update TMDB Data',
-        'Update TMDB Data',
-        'manage_options',
-        'update-tmdb-data',
-        'wp_movies_admin_page'
-    );
-});
 
 function wp_movies_update_missing_genres() {
     global $wpdb;
@@ -557,6 +572,7 @@ function wp_movies_handle_admin_actions() {
 // ==========================
 // ADMIN PAGE CALLBACK
 // ==========================
+
 function wp_movies_admin_page() {
     ?>
     <div class="wrap">
@@ -567,6 +583,7 @@ function wp_movies_admin_page() {
         // --------------------------
         // DISPLAY NOTICES (GET only)
         // --------------------------
+        
         $notice = isset($_GET['wp_movies_notice'])
             ? sanitize_text_field($_GET['wp_movies_notice'])
             : '';
@@ -626,6 +643,7 @@ function wp_movies_admin_page() {
 // ==========================
 // ENQUEUE ADMIN JS
 // ==========================
+
 add_action('admin_enqueue_scripts', function($hook) {
     if ( $hook !== 'tools_page_update-tmdb-data' ) return;
     wp_enqueue_script(
@@ -646,6 +664,7 @@ add_action('admin_enqueue_scripts', function($hook) {
 // ==============================
 // AJAX: Admin - Refresh Movies
 // ==============================
+
 add_action('wp_ajax_refresh_movies', 'wp_movies_refresh_movies');
 function wp_movies_refresh_movies() {
     if ( ! current_user_can('manage_options') ) wp_send_json_error('Unauthorized', 403);
@@ -659,6 +678,7 @@ function wp_movies_refresh_movies() {
 // ===============================
 // AJAX: Admin - Refresh TV Shows
 // ===============================
+
 add_action('wp_ajax_refresh_tvshows', 'wp_movies_refresh_tvshows');
 function wp_movies_refresh_tvshows() {
     if ( ! current_user_can('manage_options') ) wp_send_json_error('Unauthorized', 403);
