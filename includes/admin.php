@@ -159,31 +159,3 @@ add_action('admin_enqueue_scripts', function($hook) {
         'nonce_tvshows' => wp_create_nonce('refresh_tvshows_nonce')
     ]);
 });
-
-// ==============================
-// AJAX: Admin - Refresh Movies
-// ==============================
-
-add_action('wp_ajax_refresh_movies', 'wp_movies_refresh_movies');
-function wp_movies_refresh_movies() {
-    if ( ! current_user_can('manage_options') ) wp_send_json_error('Unauthorized', 403);
-    if ( ! check_ajax_referer('refresh_movies_nonce', '_wpnonce', false) ) wp_send_json_error('Nonce verification failed', 403);
-
-    $movies = wp_movies_get_from_db('movie', 8, true);
-
-    wp_send_json_success(['movies' => $movies]);
-}
-
-// ===============================
-// AJAX: Admin - Refresh TV Shows
-// ===============================
-
-add_action('wp_ajax_refresh_tvshows', 'wp_movies_refresh_tvshows');
-function wp_movies_refresh_tvshows() {
-    if ( ! current_user_can('manage_options') ) wp_send_json_error('Unauthorized', 403);
-    if ( ! check_ajax_referer('refresh_tvshows_nonce', '_wpnonce', false) ) wp_send_json_error('Nonce verification failed', 403);
-
-    $tvshows = wp_movies_get_from_db('tv', 8, true);
-
-    wp_send_json_success(['tvshows' => $tvshows]);
-}
