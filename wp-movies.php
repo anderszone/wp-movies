@@ -25,6 +25,7 @@ require_once WP_MOVIES_PLUGIN_PATH . 'includes/assets.php';
 require_once WP_MOVIES_PLUGIN_PATH . 'includes/contact.php';
 require_once WP_MOVIES_PLUGIN_PATH . 'includes/cpt.php';
 require_once WP_MOVIES_PLUGIN_PATH . 'includes/database.php';
+require_once WP_MOVIES_PLUGIN_PATH . 'includes/logger.php';
 require_once WP_MOVIES_PLUGIN_PATH . 'includes/session.php';
 
 // ==========================
@@ -34,36 +35,12 @@ define('WP_MOVIES_TRANSIENT_MOVIE', 'wp_movies_tmdb_movie');
 define('WP_MOVIES_TRANSIENT_TV', 'wp_movies_tmdb_tv');
 
 // ==========================
-// SIMPLE DEBUG LOGGER
-// ==========================
-function wp_movies_log($message, $level = 'info') {
-
-    // Only log in local environment
-    if (!defined('WP_ENVIRONMENT_TYPE') || constant('WP_ENVIRONMENT_TYPE') !== 'local') {
-        return;
-    }
-
-    // Only log warnings and errors (not normal info messages)
-    if ($level === 'error' || $level === 'warning') {
-
-        if (is_array($message) || is_object($message)) {
-            error_log(print_r($message, true));
-        } else {
-            error_log($message);
-        }
-
-    }
-}
-
-// ==========================
 // REQUIRE TMDB API KEY
 // ==========================
 if ( ! defined('TMDB_API_KEY') || ! constant('TMDB_API_KEY') ) {
-
     add_action('admin_notices', function () {
         echo '<div class="notice notice-error"><p><strong>WP Movies:</strong> TMDB_API_KEY is missing or empty in wp-config.php.</p></div>';
     });
-
     return; // STOP plugin execution safely
 }
 
