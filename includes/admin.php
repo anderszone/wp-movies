@@ -1,15 +1,10 @@
 <?php
-if ( ! defined( 'ABSPATH' ) ) {
-    exit;
-}
+if ( ! defined( 'ABSPATH' ) ) exit;
 
 // ==========================
 // ADMIN MENU
 // ==========================
-
-add_action( 'admin_menu', 'wp_movies_register_admin_menu' );
-
-function wp_movies_register_admin_menu() {
+add_action('admin_menu', function () {
     add_menu_page(
         'TMDB Movies',
         'TMDB Movies',
@@ -20,17 +15,15 @@ function wp_movies_register_admin_menu() {
         20
     );
 
-    // Update Data (ersätter WordPress auto submenu)
     add_submenu_page(
         'tmdb-movies',
         'Update Data',
         'Update Data',
         'manage_options',
-        'tmdb-movies',   // ← samma slug som parent
+        'tmdb-movies',
         'wp_movies_admin_page'
     );
 
-    // Genres
     add_submenu_page(
         'tmdb-movies',
         'Genres',
@@ -38,113 +31,99 @@ function wp_movies_register_admin_menu() {
         'manage_options',
         'edit-tags.php?taxonomy=genre&post_type=movie'
     );
-}
+});
 
 // ==========================
-// FIX ADMIN MENU HIGHLIGHT
+// FIX MENU HIGHLIGHT
 // ==========================
-
-add_filter('parent_file', function($parent_file) {
-    global $current_screen;
+add_filter('parent_file', function ($parent_file) {
+    $screen = get_current_screen();
 
     if ( isset($current_screen->taxonomy) && $current_screen->taxonomy === 'genre' ) {
-        $parent_file = 'tmdb-movies';
+        return 'tmdb-movies';
     }
 
     return $parent_file;
 });
 
-// ==========================
-// FIX ADMIN SUBMENU ACTIVE
-// ==========================
-
-add_filter('submenu_file', function($submenu_file) {
-    global $current_screen;
+add_filter('submenu_file', function ($submenu_file) {
+    $screen = get_current_screen();
 
     if ( isset($current_screen->taxonomy) && $current_screen->taxonomy === 'genre' ) {
-        $submenu_file = 'edit-tags.php?taxonomy=genre&post_type=movie';
+        return 'edit-tags.php?taxonomy=genre&post_type=movie';
     }
 
     return $submenu_file;
 });
 
 // ==========================
-// ADMIN PAGE CALLBACK
+// ADMIN PAGE
 // ==========================
-
 function wp_movies_admin_page() {
-    ?>
-    <div class="wrap">
-        <h1>Update Local Database from TMDB</h1>
-        <p>This will fetch the latest popular movies and TV shows from TMDB and update the local <code>wp_movies</code> table.</p>
+    $notice = isset($_GET['wp_movies_notice']) ? sanitize_key($_GET['wp_movies_notice']) : '';
 
-    <?php
-        // --------------------------
-        // DISPLAY NOTICES (GET only)
-        // --------------------------
-        
-        $notice = isset($_GET['wp_movies_notice'])
-            ? sanitize_text_field($_GET['wp_movies_notice'])
-            : '';
+    $messages = [
+        'updated' => ['success','TMDB data in the local database has been updated successfully.'],
+        'genres_updated' => ['success','Missing genres were successfully synced from TMDB.'],
+        'no_genres' => ['warning','No genres needed updating.']
+    ];
 
-        if ( $notice ) {
+?>
 
-            if ( $notice === 'updated' ) {
-                echo '<div class="notice notice-success is-dismissible">';
-                echo '<p>TMDB data in the local database has been updated successfully.</p>';
-                echo '</div>';
-            }
+<div class="wrap">
 
-            elseif ( $notice === 'genres_updated' ) {
-                echo '<div class="notice notice-success is-dismissible">';
-                echo '<p>Missing genres were successfully synced from TMDB.</p>';
-                echo '</div>';
-            }
+<h1><?php esc_html_e('Update Local Database from TMDB','wp-movies'); ?></h1>
 
-            elseif ( $notice === 'no_genres' ) {
-                echo '<div class="notice notice-warning is-dismissible">';
-                echo '<p>No genres needed updating.</p>';
-                echo '</div>';
-            }
-        }
-    ?>
+<p>
+<?php esc_html_e('This will fetch the latest popular movies and TV shows from TMDB and update the local','wp-movies'); ?>
+<code>wp_movies</code>
+<?php esc_html_e('table.','wp-movies'); ?>
+</p>
 
-        <!-- Update Now button -->
-        <form method="post">
-            <?php wp_nonce_field('wp_movies_update_nonce'); ?>
-            <input type="submit" name="wp_movies_update"
-                   class="button button-primary"
-                   value="Update Now from TMDB">
-        </form>
+<?php
+if ( $notice && isset($messages[$notice]) ) {
+    echo '<div class="notice notice-' . esc_attr($messages[$notice][0]) . ' is-dismissible"><p>' .
+         esc_html($messages[$notice][1]) .
+         '</p></div>';
+}
+?>
 
-        <form method="post" style="margin-top:1em;">
-            <?php wp_nonce_field('wp_movies_update_genres_nonce'); ?>
-            <input type="submit" name="wp_movies_update_genres"
-                   class="button button-secondary"
-                   value="Sync Missing Genres from TMDB">
-        </form>
+<form method="post">
+<?php wp_nonce_field('wp_movies_update_nonce'); ?>
+<input type="submit" name="wp_movies_update" class="button button-primary"
+value="<?php echo esc_attr__('Update Now from TMDB','wp-movies'); ?>">
+</form>
 
-        <p>&nbsp;</p>
-        <hr>
-        <p>&nbsp;</p>
+<form method="post" style="margin-top:1em;">
+<?php wp_nonce_field('wp_movies_update_genres_nonce'); ?>
+<input type="submit" name="wp_movies_update_genres" class="button button-secondary"
+value="<?php echo esc_attr__('Sync Missing Genres from TMDB','wp-movies'); ?>">
+</form>
 
-        <h2>Randomize Local Data</h2>
-        <p>These buttons shuffle 8 random movies or TV shows from the local database. For testing / debug only.</p>
+<p>&nbsp;</p><hr><p>&nbsp;</p>
 
-        <button id="refresh-movies" class="button button-primary">🎬 Refresh Movies</button>
-        <button id="refresh-tvshows" class="button button-secondary">📺 Refresh TV Shows</button>
+<h2><?php esc_html_e('Randomize Local Data','wp-movies'); ?></h2>
 
-        <div id="refresh-result" style="margin-top:20px;"></div>
-    </div>
-    <?php
+<p>
+<?php esc_html_e('These buttons shuffle 8 random movies or TV shows from the local database. For testing / debug only.','wp-movies'); ?>
+</p>
+
+<button id="refresh-movies" class="button button-primary">🎬 <?php esc_html_e('Refresh Movies','wp-movies'); ?></button>
+<button id="refresh-tvshows" class="button button-secondary">📺 <?php esc_html_e('Refresh TV Shows','wp-movies'); ?></button>
+
+<div id="refresh-result" style="margin-top:20px;"></div>
+
+</div>
+
+<?php
 }
 
 // ==========================
-// ENQUEUE ADMIN JS
+// ADMIN JS
 // ==========================
+add_action('admin_enqueue_scripts', function ($hook) {
+    if ( $hook !== 'toplevel_page_tmdb-movies' ) return;
 
-add_action('admin_enqueue_scripts', function($hook) {
-    if ( strpos($hook, 'tmdb-movies') === false ) return;
     wp_enqueue_script(
         'wp-movies-admin-js',
         plugin_dir_url(__FILE__) . 'admin-refresh.js',
@@ -153,7 +132,7 @@ add_action('admin_enqueue_scripts', function($hook) {
         true
     );
 
-    wp_localize_script('wp-movies-admin-js', 'wpMoviesAjax', [
+    wp_localize_script('wp-movies-admin-js','wpMoviesAjax',[
         'ajax_url' => admin_url('admin-ajax.php'),
         'nonce_movies' => wp_create_nonce('refresh_movies_nonce'),
         'nonce_tvshows' => wp_create_nonce('refresh_tvshows_nonce')
