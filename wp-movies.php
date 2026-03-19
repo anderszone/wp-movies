@@ -8,29 +8,51 @@
 
 if (!defined('ABSPATH')) exit;
 
-// ==========================
-// PLUGIN PATH
-// ==========================
+// Plugin path and URL constants
 define('WP_MOVIES_PLUGIN_PATH', plugin_dir_path(__FILE__));
+define('WP_MOVIES_PLUGIN_URL', plugin_dir_url(__FILE__));
 
-// ==========================
-// LOAD MODULES
-// ==========================
-$modules = [
-    'constants',      // Plugin constants
-    'tmdb-check',     // TMDB API key validation
-    'admin',          // Admin pages & menus
-    'admin-ajax',     // AJAX handlers
-    'assets',         // CSS & JS assets
-    'contact',        // Contact form / integration
-    'cpt',            // Custom post types
-    'database',       // Database setup & helpers
-    'logger',         // Debug logger
-    'session',        // Session helpers
-    'admin-scripts'   // Admin JS enqueue & localization
+// Full list of plugin modules to load (necessary for plugin functionality)
+$all_modules = [
+    'logger', 'constants', 'tmdb-check', 'admin', 'admin-ajax',
+    'assets', 'menu-icons', 'contact', 'cpt', 'database', 'session', 'admin-scripts'
 ];
 
-foreach ($modules as $file) {
+// List of modules to log
+$log_modules = [
+    'logger',        // Logging functions
+    'constants',     // Constants
+    'tmdb-check',    // TMDB API fetch
+    'admin',         // Admin page logic
+    'admin-ajax',    // AJAX handlers
+    'assets',
+    'menu-icons',
+    'admin-scripts'  // JS enqueue / admin assets
+];
+
+$GLOBALS['wp_movies_log_modules'] = $log_modules;
+
+foreach ($all_modules as $file) {
     $path = WP_MOVIES_PLUGIN_PATH . "includes/$file.php";
-    if (file_exists($path)) require_once $path;
+
+    if (file_exists($path)) {
+        require_once $path;
+    } else {
+        if (function_exists('wp_movies_log')) {
+            wp_movies_log("Missing module: $file", 'ERROR', 'core');
+        }
+    }
+}
+
+if (function_exists('wp_movies_log')) {
+    wp_movies_log('WP Movies plugin initialized', 'INFO', 'core');
+}
+
+// Add a blank line separator after modules
+if (
+    function_exists('wp_movies_log_block_separator') &&
+    function_exists('wp_get_environment_type') &&
+    wp_get_environment_type() === 'local'
+) {
+    wp_movies_log_block_separator();
 }

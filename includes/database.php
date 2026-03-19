@@ -33,7 +33,8 @@ function wp_movies_create_table_if_not_exists() {
         release_date date DEFAULT NULL,
         type varchar(20) DEFAULT 'movie' NOT NULL,
         PRIMARY KEY(id),
-        UNIQUE KEY tmdb_id(tmdb_id)
+        UNIQUE KEY tmdb_id(tmdb_id),
+        KEY type (type)
     ) ".$wpdb->get_charset_collate().";";
     require_once ABSPATH.'wp-admin/includes/upgrade.php';
     dbDelta($sql);
@@ -88,14 +89,19 @@ function wp_movies_save_tmdb_movie($m){
 }
 
 function wp_movies_save_to_db($items,$type='movie'){
+    if(empty($items) || !is_array($items)){
+        wp_movies_log('Invalid items array','error');
+        return;
+    }
     global $wpdb; $t=$wpdb->prefix.'movies';
     foreach($items as $i){
+        if(empty($i->id)) continue;
         $g=isset($i->genre_ids)?implode(', ',wp_movies_get_genre_names_from_ids($i->genre_ids,$type)):(isset($i->genres)?implode(', ',array_column($i->genres,'name')):'');
         $wpdb->replace($t,[
             'tmdb_id'=>$i->id,
-            'title'=>$i->title??$i->name,
+            'title'=>$i->title ?? ($i->name ?? ''),
             'poster'=>$i->poster_path??'',
-            'release_date'=>$i->release_date??($i->first_air_date??null),
+            'release_date'=>$i->release_date ?? ($i->first_air_date ?? ''),
             'genre'=>$g,
             'type'=>$type
         ],['%d','%s','%s','%s','%s','%s'])?:wp_movies_log('DB replace error: '.$wpdb->last_error);
@@ -123,9 +129,17 @@ function wp_movies_fetch_and_save(){
 // ==========================
 // FETCH FROM DB
 // ==========================
-function wp_movies_get_from_db($type='movie',$limit=8,$random=false){
-    global $wpdb; $t=$wpdb->prefix.'movies';
-    $q=$random?$wpdb->prepare("SELECT * FROM $t WHERE type=%s ORDER BY RAND() LIMIT %d",$type,$limit):$wpdb->prepare("SELECT * FROM $t WHERE type=%s ORDER BY id DESC LIMIT %d",$type,$limit);
+function wp_movies_get_from_db($type='movie', $limit=8, $random=false){
+    global $wpdb;
+    $t = $wpdb->prefix . 'movies';
+    $q = $random
+        ? $wpdb->prepare(
+            "SELECT * FROM $t WHERE type=%s LIMIT %d OFFSET %d",
+            $type,
+            $limit,
+            max(0, rand(0, max(0, $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $t WHERE type=%s", $type)) - $limit)))
+        )
+        : $wpdb->prepare("SELECT * FROM $t WHERE type=%s ORDER BY id DESC LIMIT %d", $type, $limit);
     return $wpdb->get_results($q);
 }
 
@@ -157,3 +171,8 @@ function wp_movies_handle_admin_actions(){
     if(isset($_POST['wp_movies_update'])&&check_admin_referer('wp_movies_update_nonce')){wp_movies_fetch_and_save(); wp_redirect(add_query_arg(['wp_movies_notice'=>'updated'],admin_url('tools.php?page=update-tmdb-data'))); exit;}
     if(isset($_POST['wp_movies_update_genres'])&&check_admin_referer('wp_movies_update_genres_nonce')){$u=wp_movies_update_missing_genres(); wp_redirect(add_query_arg(['wp_movies_notice'=>empty($u)?'no_genres':'genres_updated'],admin_url('tools.php?page=update-tmdb-data'))); exit;}
 }
+
+// ==========================
+// DATABASE DEBUG
+// ==========================
+wp_movies_register_module('database');

@@ -2,9 +2,7 @@
 // ================================
 // REGISTER MOVIE CUSTOM POST TYPE
 // ================================
-
 function wp_movie_register_post_type() {
-
     register_post_type( 'movie', array(
         'labels' => array(
             'name'               => __( 'Movies' ),
@@ -40,15 +38,12 @@ function wp_movie_register_post_type() {
 
         'menu_icon' => 'dashicons-format-video',
     ) );
-
 }
 
 // ================================
 // REGISTER GENRE TAXONOMY
 // ================================
-
 function wp_movie_register_taxonomies() {
-
     register_taxonomy(
         'genre',
         'movie',
@@ -81,12 +76,15 @@ function wp_movie_register_taxonomies() {
             ),
         )
     );
-
 }
 
 // ================================
 // HOOKS
 // ================================
-
 add_action( 'init', 'wp_movie_register_post_type' );
 add_action( 'init', 'wp_movie_register_taxonomies' );
+
+// ==========================
+// CUSTOM POST TYPE for DEBUG
+// ==========================
+wp_movies_register_module('cpt');

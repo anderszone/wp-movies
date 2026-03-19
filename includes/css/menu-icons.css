@@ -1,0 +1,18 @@
+/* ==========================
+// Menu Icons - Minimal
+// ========================== */
+/* Base style for icons via data-icon */
+[data-icon]::before {
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    content: "";
+    display: inline-block;
+    margin-right: 8px; /* spacing between icon and text */
+    text-align: center;
+}
+
+/* Icon mappings */
+[data-icon="home"]::before      { content: "\f015"; }  /* Home */
+[data-icon="about-us"]::before  { content: "\f05a"; }  /* About Us */
+[data-icon="movies"]::before    { content: "\f008"; }  /* Movies */
+[data-icon="tv"]::before        { content: "\f26c"; }  /* TV Shows */

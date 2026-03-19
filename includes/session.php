@@ -7,3 +7,8 @@ function wp_movies_start_session() {
 }
 
 add_action( 'init', 'wp_movies_start_session' );
+
+// ==========================
+// PHP SESSION for DEBUG
+// ==========================
+wp_movies_register_module('session');

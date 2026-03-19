@@ -10,3 +10,8 @@ if (!defined('TMDB_API_KEY') || !constant('TMDB_API_KEY')) {
     });
     return; // Stop plugin execution
 }
+
+// ==========================
+// TMDB API CHECK DEBUG
+// ==========================
+wp_movies_register_module('tmdb-check');
