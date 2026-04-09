@@ -1,0 +1,72 @@
+/* WP Movies Contact Form – Minimal fallback */
+.wp-movies-form {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.wp-movies-form input,
+.wp-movies-form textarea {
+    display: block;
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 8px;
+    font: inherit;
+    box-sizing: border-box;
+}
+
+.wp-movies-form textarea {
+    min-height: 120px;
+    resize: vertical;
+}
+
+.wp-movies-form button {
+    padding: 10px 16px;
+    cursor: pointer;
+}
+
+/* Honeypot field */
+.wp-movies-form__honeypot {
+    display: none;
+}
+
+/* Success & error messages */
+.wp-movies-form .contact-success {
+    background: #1e4620;
+    color: #b4f5b4;
+    padding: 12px;
+    margin-bottom: 20px;
+    border-left: 4px solid #4caf50;
+    border-radius: 4px;
+    transition: opacity 0.4s ease;
+}
+
+.wp-movies-form .contact-error {
+    background: rgba(255, 138, 61, 0.15);
+    color: #FF8A3D;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    border-left: 4px solid #FF8A3D;
+    border-radius: 4px;
+}
+
+/* Field spacing */
+.wp-movies-form p {
+    margin-bottom: 1rem;
+}
+
+/* Input error */
+.wp-movies-form .input-error {
+    border: 1px solid #FF8A3D !important;
+}
+
+.wp-movies-form .field-error {
+    color: #FF8A3D;
+    font-size: 0.9rem;
+    margin-top: 6px;
+}
+
+/* Loading state */
+.wp-movies-form button.is-loading {
+    opacity: 0.7;
+    cursor: not-allowed;
+}

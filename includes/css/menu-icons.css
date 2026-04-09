@@ -3,8 +3,8 @@
 // ========================== */
 /* Base style for icons via data-icon */
 [data-icon]::before {
-    font-family: "Font Awesome 6 Free";
-    font-weight: 900;
+    font-family: "Font Awesome 7 Free" !important;
+    font-weight: 900 !important;
     content: "";
     display: inline-block;
     margin-right: 8px; /* spacing between icon and text */
