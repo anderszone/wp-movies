@@ -1,4 +1,6 @@
 <?php
+error_log('CPT FILE LOADED');
+
 // ================================
 // REGISTER MOVIE CUSTOM POST TYPE
 // ================================
@@ -84,7 +86,9 @@ function wp_movie_register_taxonomies() {
 add_action( 'init', 'wp_movie_register_post_type' );
 add_action( 'init', 'wp_movie_register_taxonomies' );
 
-// ==========================
-// CUSTOM POST TYPE for DEBUG
-// ==========================
-wp_movies_register_module('cpt');
+// ================================
+// CPT DEBUG (safe)
+// ================================
+if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+    error_log( '[WP-MOVIES] CPT loaded: ' . __FILE__ );
+}

@@ -176,6 +176,8 @@ function wp_movies_handle_contact() {
 }
 
 // ==========================
-// CONTACT FORM MODULE (DEBUG)
+// CONTACT MODULE DEBUG (safe)
 // ==========================
-wp_movies_register_module('contact');
+if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+    error_log( '[WP-MOVIES] CONTACT loaded: ' . __FILE__ );
+}

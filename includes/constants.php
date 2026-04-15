@@ -15,6 +15,8 @@ if (!defined('WP_MOVIES_PLUGIN_PATH')) {
 }
 
 // ==========================
-// CONSTANTS DEBUG
+// CONSTANTS DEBUG (safe)
 // ==========================
-wp_movies_register_module('constants');
+if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+    error_log( '[WP-MOVIES] CONSTANTS loaded: ' . __FILE__ );
+}

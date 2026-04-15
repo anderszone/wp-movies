@@ -5,10 +5,11 @@ function wp_movies_start_session() {
         session_start();
     }
 }
-
 add_action( 'init', 'wp_movies_start_session' );
 
 // ==========================
-// PHP SESSION for DEBUG
+// SESSION DEBUG (safe)
 // ==========================
-wp_movies_register_module('session');
+if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+    error_log( '[WP-MOVIES] SESSION loaded: ' . __FILE__ );
+}

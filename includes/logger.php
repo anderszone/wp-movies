@@ -80,17 +80,6 @@ function wp_movies_get_context() {
 }
 
 // ========================================================
-// MODULE REGISTRY
-// ========================================================
-if (!isset($GLOBALS['wp_movies_loaded_modules'])) $GLOBALS['wp_movies_loaded_modules'] = [];
-
-function wp_movies_register_module($module) {
-    if (!in_array($module, $GLOBALS['wp_movies_loaded_modules'], true)) {
-        $GLOBALS['wp_movies_loaded_modules'][] = $module;
-    }
-}
-
-// ========================================================
 // SMART PAGE SUMMARY LOGGER (10/10)
 // ========================================================
 if (!isset($GLOBALS['wp_movies_request_id'])) {
