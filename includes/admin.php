@@ -72,6 +72,8 @@ function wp_movies_admin_page(){
 }
 
 // ==========================
-// ADMIN DEBUG MODULE
+// ADMIN DEBUG (safe)
 // ==========================
-wp_movies_register_module('admin');
+if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+    error_log( '[WP-MOVIES] ADMIN loaded: ' . __FILE__ );
+}

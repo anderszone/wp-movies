@@ -173,6 +173,8 @@ function wp_movies_handle_admin_actions(){
 }
 
 // ==========================
-// DATABASE DEBUG
+// DATABASE DEBUG (safe)
 // ==========================
-wp_movies_register_module('database');
+if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+    error_log( '[WP-MOVIES] DATABASE loaded: ' . __FILE__ );
+}

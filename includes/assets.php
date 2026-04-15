@@ -205,7 +205,9 @@ function wp_movies_add_sri($html, $handle) {
 }
 add_filter('style_loader_tag', 'wp_movies_add_sri', 10, 2);
 
-// ==========================
-// ASSETS MODULE (DEBUG)
-// ==========================
-wp_movies_register_module('assets');
+// ================================
+// DEBUG (safe, no side effects)
+// ================================
+if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+    error_log( '[WP-MOVIES] ASSETS loaded: ' . __FILE__ );
+}

@@ -25,6 +25,8 @@ add_action('admin_enqueue_scripts', function($hook) {
 });
 
 // ==========================
-// ADMIN SCRIPTS DEBUG MODULE
+// ADMIN SCRIPTS DEBUG (safe)
 // ==========================
-wp_movies_register_module('admin-scripts');
+if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+    error_log( '[WP-MOVIES] ADMIN-SCRIPTS loaded: ' . __FILE__ );
+}

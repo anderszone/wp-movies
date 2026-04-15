@@ -12,6 +12,8 @@ if (!defined('TMDB_API_KEY') || !constant('TMDB_API_KEY')) {
 }
 
 // ==========================
-// TMDB API CHECK DEBUG
+// TMDB DEBUG (safe)
 // ==========================
-wp_movies_register_module('tmdb-check');
+if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+    error_log( '[WP-MOVIES] TMDB CHECK loaded: ' . __FILE__ );
+}
