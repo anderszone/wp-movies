@@ -44,6 +44,8 @@ foreach ($all_modules as $file) {
     }
 }
 
+require_once WP_MOVIES_PLUGIN_PATH . 'includes/genre-functions.php';
+
 if (function_exists('wp_movies_log')) {
     wp_movies_log('WP Movies plugin initialized', 'INFO', 'core');
 }
