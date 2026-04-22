@@ -12,11 +12,7 @@ if ( ! defined('ABSPATH') ) {
  * @return array
  */
 function wp_movies_get_by_genre_smart( $genre_slug, $type = 'movie' ) {
-
-    // Debug logging (helps trace incoming values)
-    error_log('GENRE SLUG: ' . $genre_slug);
-    error_log('TYPE: ' . $type);
-
+    
     global $wpdb;
 
     // Database table name (WordPress prefix + custom table)
@@ -25,21 +21,46 @@ function wp_movies_get_by_genre_smart( $genre_slug, $type = 'movie' ) {
     // Ensure type is valid (fallback to "movie" if invalid input is given)
     $type = in_array( $type, ['movie', 'tv'], true ) ? $type : 'movie';
 
-    // Normalize genre slug:
-    // Converts "sci-fi" → "sci fi" for better database matching
+    // Normalize genre slug (e.g. "sci-fi" → "sci fi")
     $genre_search = str_replace('-', ' ', $genre_slug);
 
-    // Query database for matching movies or TV shows
+    // Map slug to possible genre names in database
+    $genre_map = [
+        'sci-fi'  => ['Science Fiction', 'Sci-Fi & Fantasy'],
+        'action'  => ['Action', 'Action & Adventure'],
+        'fantasy' => ['Fantasy', 'Sci-Fi & Fantasy'],
+    ];
+
+    // Use mapped genres if available, otherwise fallback to normalized slug
+    $genres = $genre_map[$genre_slug] ?? [$genre_search];
+
+    // Build dynamic WHERE clause for multiple genre matches
+    $like_clauses = [];
+    $values = [];
+
+    foreach ( $genres as $g ) {
+        $like_clauses[] = "LOWER(genre) LIKE LOWER(%s)";
+        $values[] = '%' . $g . '%';
+    }
+
+    // Combine all genre conditions with OR
+    $where_genre = implode(' OR ', $like_clauses);
+
+    // Add type as last parameter
+    $values[] = $type;
+
+    // Final query
+    $query = "
+        SELECT tmdb_id, title, poster, release_date
+        FROM $table
+        WHERE ($where_genre)
+        AND type = %s
+        ORDER BY release_date DESC
+    ";
+
+    // Execute query safely
     $results = $wpdb->get_results(
-        $wpdb->prepare(
-            "SELECT tmdb_id, title, poster, release_date
-             FROM $table
-             WHERE LOWER(genre) LIKE LOWER(%s)
-             AND type = %s
-             ORDER BY release_date DESC",
-            '%' . $genre_search . '%',
-            $type
-        )
+        $wpdb->prepare( $query, ...$values )
     );
 
     // Return empty array if no results are found

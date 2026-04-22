@@ -26,11 +26,13 @@ if ( defined('DOING_AJAX') && DOING_AJAX ) {
      *
      * @param string $nonce_name The expected nonce action name
      */
-    function wp_movies_ajax_validate( $nonce_name ) {
-        if ( ! current_user_can('manage_options') ) {
+    function wp_movies_ajax_validate($nonce_name) {
+
+        if (!current_user_can('manage_options')) {
             wp_send_json_error('Unauthorized', 403);
         }
-        if ( ! isset($_POST['_wpnonce']) || ! wp_verify_nonce($_POST['_wpnonce'], $nonce_name) ) {
+
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], $nonce_name)) {
             wp_send_json_error('Nonce verification failed', 403);
         }
     }
